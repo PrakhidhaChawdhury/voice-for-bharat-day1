@@ -13,7 +13,7 @@ from livekit.agents import (
     tokenize,
     room_io,
 )
-from livekit.plugins import murf, silero, deepgram, noise_cancellation
+from livekit.plugins import murf, silero, google, deepgram, noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 logger = logging.getLogger("agent")
@@ -21,8 +21,7 @@ logger = logging.getLogger("agent")
 load_dotenv(".env.local")
 
 # System Prompt tailored for the Financial Services track (#VoiceForBharat Challenge)
-SYSTEM_PROMPT = """
-You are Raksha, an empathetic AI voice agent built for digital banking safety in India.
+SYSTEM_PROMPT = """You are Raksha, an empathetic AI voice agent built for digital banking safety in India.
 
 OBJECTIVES:
 1. Educate citizens on safe digital banking and scam prevention.
@@ -62,24 +61,16 @@ async def my_agent(ctx: JobContext):
     }
 
     session = AgentSession(
-        # Speech-to-text (STT) using Deepgram Nova-3
-        stt=deepgram.STT(model="nova-3"),
-        
-        # LLM brain hosted via LiveKit Cloud Inference Gateway (Gemini 2.5 Flash)
-        llm=inference.LLM(
-            model="google/gemini-2.5-flash"
+        stt=deepgram.STT(model="nova-3", language="multi"),
+        llm=google.LLM(
+            model="gemini-3.5-flash-lite",
         ),
-        
-        # Text-to-speech (TTS) using Murf Falcon (Anisha)
         tts=murf.TTS(
-            voice="Anisha", 
-            locale="en-IN",
+            voice="Anisha",
             style="Conversation",
             tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
-            text_pacing=True
+            text_pacing=True,
         ),
-        
-        # Turn detection
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
         preemptive_generation=True,
