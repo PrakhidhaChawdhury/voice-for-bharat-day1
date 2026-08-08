@@ -1,26 +1,11 @@
-import { Button } from '@/components/ui/button';
+'use client';
 
-function WelcomeImage() {
-  return (
-    <svg
-      width="64"
-      height="64"
-      viewBox="0 0 64 64"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="text-fg0 mb-4 size-16"
-    >
-      <path
-        d="M15 24V40C15 40.7957 14.6839 41.5587 14.1213 42.1213C13.5587 42.6839 12.7956 43 12 43C11.2044 43 10.4413 42.6839 9.87868 42.1213C9.31607 41.5587 9 40.7957 9 40V24C9 23.2044 9.31607 22.4413 9.87868 21.8787C10.4413 21.3161 11.2044 21 12 21C12.7956 21 13.5587 21.3161 14.1213 21.8787C14.6839 22.4413 15 23.2044 15 24ZM22 5C21.2044 5 20.4413 5.31607 19.8787 5.87868C19.3161 6.44129 19 7.20435 19 8V56C19 56.7957 19.3161 57.5587 19.8787 58.1213C20.4413 58.6839 21.2044 59 22 59C22.7956 59 23.5587 58.6839 24.1213 58.1213C24.6839 57.5587 25 56.7957 25 56V8C25 7.20435 24.6839 6.44129 24.1213 5.87868C23.5587 5.31607 22.7956 5 22 5ZM32 13C31.2044 13 30.4413 13.3161 29.8787 13.8787C29.3161 14.4413 29 15.2044 29 16V48C29 48.7957 29.3161 49.5587 29.8787 50.1213C30.4413 50.6839 31.2044 51 32 51C32.7956 51 33.5587 50.6839 34.1213 50.1213C34.6839 49.5587 35 48.7957 35 48V16C35 15.2044 34.6839 14.4413 34.1213 13.8787C33.5587 13.3161 32.7956 13 32 13ZM42 21C41.2043 21 40.4413 21.3161 39.8787 21.8787C39.3161 22.4413 39 23.2044 39 24V40C39 40.7957 39.3161 41.5587 39.8787 42.1213C40.4413 42.6839 41.2043 43 42 43C42.7957 43 43.5587 42.6839 44.1213 42.1213C44.6839 41.5587 45 40.7957 45 40V24C45 23.2044 44.6839 22.4413 44.1213 21.8787C43.5587 21.3161 42.7957 21 42 21ZM52 17C51.2043 17 50.4413 17.3161 49.8787 17.8787C49.3161 18.4413 49 19.2044 49 20V44C49 44.7957 49.3161 45.5587 49.8787 46.1213C50.4413 46.6839 51.2043 47 52 47C52.7957 47 53.5587 46.6839 54.1213 46.1213C54.6839 45.5587 55 44.7957 55 44V20C55 19.2044 54.6839 18.4413 54.1213 17.8787C53.5587 17.3161 52.7957 17 52 17Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
+import React, { useState } from 'react';
 
 interface WelcomeViewProps {
   startButtonText: string;
   onStartCall: () => void;
+  ref?: React.Ref<HTMLDivElement>;
 }
 
 export const WelcomeView = ({
@@ -28,38 +13,181 @@ export const WelcomeView = ({
   onStartCall,
   ref,
 }: React.ComponentProps<'div'> & WelcomeViewProps) => {
+  const [micError, setMicError] = useState<string | null>(null);
+
+  const handleStartCall = async () => {
+    try {
+      setMicError(null);
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+      onStartCall();
+    } catch (err: any) {
+      if (
+        err.name === 'NotAllowedError' ||
+        err.name === 'PermissionDeniedError' ||
+        err.message?.includes('denied')
+      ) {
+        setMicError(
+          'Microphone blocked. Click the lock icon in your address bar to allow mic access.'
+        );
+      } else {
+        onStartCall();
+      }
+    }
+  };
+
   return (
-    <div ref={ref}>
-      <section className="bg-background flex flex-col items-center justify-center text-center">
-        <WelcomeImage />
+    <div
+      ref={ref}
+      className="relative flex min-h-screen w-full flex-col justify-between bg-[#060911] text-slate-100 font-sans antialiased overflow-hidden selection:bg-indigo-500 selection:text-white"
+    >
+      {/* Subtle Dot Grid Pattern */}
+      <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none" />
 
-        <p className="text-foreground max-w-prose pt-1 leading-6 font-medium">
-          Chat live with your voice AI agent
+      {/* Dynamic Ambient Background Glows */}
+      <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-indigo-600/15 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-[130px] pointer-events-none" />
+
+      {/* Integrated Header Bar */}
+      <header className="relative z-20 w-full border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-xl px-6 md:px-12 py-3.5 flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-500/20 ring-1 ring-white/20">
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+              />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-sm font-bold tracking-tight text-white leading-none">
+              Raksha AI
+            </h1>
+            <p className="text-[11px] text-slate-400 mt-0.5 font-medium tracking-wide">
+              Digital Banking Safety & Fraud Prevention
+            </p>
+          </div>
+        </div>
+
+        {/* Shifted left to avoid overlapping the LiveKit Cloud tag */}
+        <div className="flex items-center space-x-3 pr-44 md:pr-52">
+          <div className="inline-flex items-center space-x-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1 text-[11px] font-semibold text-emerald-400 backdrop-blur-md shadow-inner">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            <span>1930 Cyber Crime Sync Active</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Centered Main Content Area */}
+      <main className="relative z-10 flex-1 max-w-5xl w-full mx-auto p-6 md:p-8 flex items-center justify-center">
+        <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+          
+          {/* Left Side: Security Features & Prompt Suggestions */}
+          <div className="md:col-span-5 space-y-4">
+            
+            {/* Protocol Summary Card */}
+            <div className="rounded-2xl border border-slate-700/50 bg-slate-900/60 p-5 backdrop-blur-2xl shadow-xl shadow-black/40 ring-1 ring-white/10 space-y-3">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 flex items-center space-x-2">
+                <span>🛡️</span>
+                <span>Active Guardrails</span>
+              </h3>
+              <ul className="space-y-2.5 text-xs text-slate-300 font-medium">
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span>Instant OTP & PIN Refusal Logic</span>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span>Native Hinglish Scam Detection</span>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-400 font-bold">✓</span>
+                  <span>National Helpline 1930 Escalation</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Interactive Prompt Pills */}
+            <div className="rounded-2xl border border-slate-700/50 bg-slate-900/40 p-4 backdrop-blur-2xl shadow-lg ring-1 ring-white/5 space-y-2.5">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Try asking Raksha:
+              </p>
+              <div className="flex flex-col gap-2">
+                <span className="px-3 py-2 rounded-xl border border-slate-700/60 bg-slate-800/50 text-[11px] text-slate-300 transition-all hover:border-indigo-500/50 hover:bg-slate-800/80 hover:text-white cursor-pointer flex items-center justify-between">
+                  <span>💬 "Mujhe ek suspicious link aaya hai"</span>
+                  <span className="text-slate-500 text-[10px]">→</span>
+                </span>
+                <span className="px-3 py-2 rounded-xl border border-slate-700/60 bg-slate-800/50 text-[11px] text-slate-300 transition-all hover:border-indigo-500/50 hover:bg-slate-800/80 hover:text-white cursor-pointer flex items-center justify-between">
+                  <span>🔑 "Can I share my OTP for verification?"</span>
+                  <span className="text-slate-500 text-[10px]">→</span>
+                </span>
+                <span className="px-3 py-2 rounded-xl border border-slate-700/60 bg-slate-800/50 text-[11px] text-slate-300 transition-all hover:border-indigo-500/50 hover:bg-slate-800/80 hover:text-white cursor-pointer flex items-center justify-between">
+                  <span>📞 "How to report fraud on 1930?"</span>
+                  <span className="text-slate-500 text-[10px]">→</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Side: Hero Glass Consultation Card */}
+          <div className="md:col-span-7 flex flex-col items-center">
+            <div className="relative w-full max-w-md rounded-3xl border border-slate-700/60 bg-slate-900/70 p-8 md:p-10 backdrop-blur-2xl shadow-2xl shadow-indigo-950/30 ring-1 ring-white/10 flex flex-col items-center text-center space-y-6">
+              
+              {/* Inner Glow Spotlight */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-20 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none" />
+
+              {/* Center Shield Icon */}
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600/30 to-purple-600/30 border border-indigo-400/30 shadow-lg shadow-indigo-500/20 ring-1 ring-white/20 text-3xl">
+                🛡️
+              </div>
+
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold tracking-tight text-white">
+                  Start Safety Consultation
+                </h2>
+                <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
+                  Connect with Raksha in real-time to analyze suspicious bank messages, verify links, or report scams.
+                </p>
+              </div>
+
+              {/* Glowing CTA Button */}
+              <div className="relative w-full pt-2">
+                <button
+                  onClick={handleStartCall}
+                  className="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 active:scale-[0.98] text-white font-bold text-xs py-4 px-6 rounded-xl transition-all duration-200 shadow-lg shadow-indigo-600/30 border border-indigo-400/30 cursor-pointer tracking-wider uppercase"
+                >
+                  {startButtonText || 'Start Consultation'}
+                </button>
+              </div>
+
+              {/* Mic Permission Error Alert */}
+              {micError && (
+                <div className="w-full bg-rose-950/70 border border-rose-800/80 text-rose-200 p-3.5 rounded-xl text-xs text-left leading-relaxed shadow-lg">
+                  ⚠️ {micError}
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </main>
+
+      {/* Grounded Footer */}
+      <footer className="relative z-20 w-full border-t border-slate-800/80 bg-slate-950/70 py-3.5 text-center backdrop-blur-xl">
+        <p className="text-[11px] text-slate-500 font-mono tracking-wider">
+          POWERED BY <span className="text-slate-300 font-semibold">MURF FALCON</span> & LIVEKIT • #VOICEFORBHARAT
         </p>
-
-        <Button
-          size="lg"
-          onClick={onStartCall}
-          className="mt-6 w-64 rounded-full font-mono text-xs font-bold tracking-wider uppercase"
-        >
-          {startButtonText}
-        </Button>
-      </section>
-
-      <div className="fixed bottom-5 left-0 flex w-full items-center justify-center">
-        <p className="text-muted-foreground max-w-prose pt-1 text-xs leading-5 font-normal text-pretty md:text-sm">
-          Need help getting set up? Check out the{' '}
-          <a
-            target="_blank"
-            rel="noopener noreferrer"
-            href="https://docs.livekit.io/agents/start/voice-ai/"
-            className="underline"
-          >
-            Voice AI quickstart
-          </a>
-          .
-        </p>
-      </div>
+      </footer>
     </div>
   );
 };
