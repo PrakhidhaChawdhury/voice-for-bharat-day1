@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -30,13 +31,14 @@ logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
 
-# System Prompt tailored for Financial Services track (#VoiceForBharat Challenge - Day 4)
-SYSTEM_PROMPT = """You are Raksha, an empathetic AI voice agent built for digital banking safety in India.
+# System Prompt tailored for Financial Services track (#VoiceForBharat Challenge - Day 5)
+SYSTEM_PROMPT = """You are Raksha, an empathetic AI voice agent built for digital banking safety and financial scheme guidance in India.
 
 OBJECTIVES:
 1. Educate citizens on safe digital banking and scam prevention.
-2. Provide immediate escalation steps for cyber fraud victims.
-3. Remember returning callers and their past banking safety checks.
+2. Check eligibility and required document checklists for official government banking/insurance schemes.
+3. Provide immediate escalation steps for cyber fraud victims.
+4. Remember returning callers and their past banking safety checks.
 
 LANGUAGE & SCRIPT (MANDATORY):
 - Always write every language in its own native script.
@@ -49,6 +51,11 @@ MEMORY & CONSENT RULES (HARD REQUIREMENT):
 3. BEFORE saving any new facts, ASK for explicit user consent (e.g., "क्या मैं आपकी सुरक्षा प्राथमिकताओं को याद रख सकती हूँ?").
 4. If user says NO/declines consent, DO NOT save anything.
 5. If YES, call `save_caller_memory`.
+
+TOOLS & REAL-TIME DATA (DAY 5 MANDATORY):
+- When a user asks about scheme eligibility or document requirements, call `check_scheme_eligibility`.
+- Always mention when the data is from (e.g., "अगस्त 2026 के दिशानिर्देशों के अनुसार...").
+- If data retrieval fails, communicate the fallback out loud gracefully.
 
 GUARDRAILS (HARD REFUSAL):
 - NEVER ask for, accept, or store OTPs, PINs, passwords, bank account numbers, or government card IDs.
@@ -99,6 +106,41 @@ class Assistant(Agent):
         )
         return f"Successfully saved memory for {name}."
 
+    @function_tool()
+    async def check_scheme_eligibility(
+        self,
+        context: RunContext,
+        scheme_key: str,
+        user_age: int = 25,
+    ) -> str:
+        """Fetch real-time official scheme eligibility, document checklist, and updated rates.
+
+        Args:
+            scheme_key: The target scheme identifier, e.g., 'pmjjby' (life insurance), 'pmsby' (accident insurance), or 'cyber_claim'.
+            user_age: The caller's age to verify eligibility rules.
+        """
+        try:
+            scheme_data = db.get_scheme_info(scheme_key)
+            if not scheme_data:
+                return "क्षमा करें, इस योजना की ताज़ा जानकारी अभी उपलब्ध नहीं है। कृपया अपनी बैंक शाखा से संपर्क करें।"
+
+            is_eligible = scheme_data["min_age"] <= user_age <= scheme_data["max_age"]
+            as_of_date = datetime.now().strftime("%B %Y")
+
+            result = {
+                "scheme_name": scheme_data["name"],
+                "as_of": as_of_date,
+                "is_eligible": is_eligible,
+                "annual_cost": scheme_data["cost"],
+                "required_documents": scheme_data["documents"],
+            }
+            return json.dumps(result, ensure_ascii=False)
+
+        except Exception as e:
+            logger.error(f"Error fetching scheme data: {e}")
+            # Step 4: Spoken graceful error fallback
+            return "सर्वर से जुड़ने में समस्या आ रही है। जानकारी के लिए कृपया 1930 या निकटतम बैंक शाखा में संपर्क करें।"
+
 
 server = AgentServer()
 
@@ -123,7 +165,7 @@ async def my_agent(ctx: JobContext):
             model="gemini-3.5-flash-lite",
         ),
         tts=murf.TTS(
-            voice="Anisha",  # explicit locale so Hindi is spoken natively, not with an English accent
+            voice="Anisha",
             style="Conversation",
             tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
             text_pacing=True,
@@ -133,7 +175,6 @@ async def my_agent(ctx: JobContext):
         preemptive_generation=True,
     )
 
-    # Tools now live directly on the Assistant agent instance — no fnc_ctx needed.
     await session.start(
         agent=Assistant(user_id="caller_001"),
         room=ctx.room,
