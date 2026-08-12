@@ -1,6 +1,10 @@
 import json
 import logging
 import sys
+import os
+import random
+import re
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 
@@ -31,7 +35,7 @@ logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
 
-# System Prompt tailored for Financial Services track (#VoiceForBharat Challenge - Day 5)
+# System Prompt tailored for Financial Services track (#VoiceForBharat Challenge)
 SYSTEM_PROMPT = """You are Raksha, an empathetic AI voice agent built for digital banking safety and financial scheme guidance in India.
 
 OBJECTIVES:
@@ -49,7 +53,7 @@ LANGUAGE & SCRIPT (MANDATORY):
 MEMORY & CONSENT RULES (HARD REQUIREMENT):
 1. At the start of a call, use `lookup_caller` to see if you remember the user.
 2. If returning user, greet them by name in Devanagari script (e.g., "नमस्ते रमेशजी! वापसी पर आपका स्वागत है।").
-3. BEFORE saving any new facts, ASK for explicit user consent (e.g., "क्या मैं आपकी सुरक्षा प्राथमिकताओं को याद रख सकती हूँ?").
+3. BEFORE saving any new facts, ASK for explicit user consent.
 4. If user says NO/declines consent, DO NOT save anything.
 5. If YES, call `save_caller_memory`.
 
@@ -58,10 +62,64 @@ TOOLS & REAL-TIME DATA (DAY 5 MANDATORY):
 - Always mention when the data is from (e.g., "अगस्त 2026 के दिशानिर्देशों के अनुसार...").
 - If data retrieval fails, communicate the fallback out loud gracefully.
 
+HUMAN ESCALATION RULES (DAY 7 MANDATE):
+You must ask for human help if:
+1. The caller reports active financial fraud or a compromised device (e.g., money actively missing, suspicious APK installed).
+2. The caller needs a complex financial decision, dispute resolution, or refund that you cannot make.
+
+MANDATORY CONSENT PROTOCOL BEFORE ESCALATION:
+- When an escalation situation occurs, you MUST FIRST explain to the caller what information you will share (their issue summary, urgency) and explicitly ask for their permission.
+- EXAMPLE: "क्या मैं आपकी शिकायत हमारी मानव सुरक्षा टीम को भेज सकती हूँ?" (Can I forward your complaint to our human security team?)
+- DO NOT call `create_escalation` UNTIL the user explicitly says YES/Haan/Sure.
+- IF THE USER SAYS NO: Politely respect their decision, do NOT call the tool, and advise them to call 1930 directly.
+
 GUARDRAILS (HARD REFUSAL):
-- NEVER ask for, accept, or store OTPs, PINs, passwords, bank account numbers, or government card IDs.
+- NEVER ask for, accept, or store OTPs, PINs, passwords, bank account numbers, Aadhaar numbers, or government card IDs.
 - If provided, REFUSE IMMEDIATELY: "मैं OTP या व्यक्तिगत बैंकिंग विवरण प्रोसेस नहीं कर सकती। धोखाधड़ी की रिपोर्ट के लिए तुरंत 1930 पर कॉल करें।"
+- Do not include passwords, OTPs, PINs, account numbers, or Aadhaar numbers in your summary.
 """
+
+# --- Privacy Sanitizer ---
+def sanitize_summary(text: str) -> str:
+    """Removes sensitive details before sending to the human dashboard."""
+    # Redact 4-6 digit codes (OTPs/PINs)
+    text = re.sub(r'\b\d{4,6}\b', '[OTP/PIN Redacted]', text)
+    # Redact 10-16 digit numbers (Aadhaar, Account Numbers, Cards)
+    text = re.sub(r'\b\d{10,16}\b', '[Aadhaar/Account Redacted]', text)
+    return text
+
+# --- Discord Notification Helper ---
+def send_discord_alert(payload: dict):
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+    if not webhook_url:
+        logger.warning("DISCORD_WEBHOOK_URL not set in .env.local. Skipping Discord alert.")
+        return
+
+    # Discord's webhook format expects application/json
+    discord_data = {
+        "embeds": [{
+            "title": f"🚨 Human Escalation: {payload['ticket_id']}",
+            "color": 15158332 if payload['urgency'].lower() == 'emergency' else 3447003,
+            "fields": [
+                {"name": "Caller", "value": payload['caller_id'], "inline": True},
+                {"name": "Urgency", "value": payload['urgency'].upper(), "inline": True},
+                {"name": "Summary", "value": payload['issue_summary'], "inline": False},
+                {"name": "AI Checks Completed", "value": payload['checks_completed'], "inline": False},
+            ],
+            "footer": {"text": "Raksha Safety Escalation Desk"}
+        }]
+    }
+
+    try:
+        req = urllib.request.Request(
+            webhook_url,
+            data=json.dumps(discord_data).encode("utf-8"),
+            headers={"Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
+        )
+        urllib.request.urlopen(req)
+        logger.info(f"Discord escalation alert posted for {payload['ticket_id']}")
+    except Exception as e:
+        logger.error(f"Discord webhook failed: {e}")
 
 
 class Assistant(Agent):
@@ -139,8 +197,38 @@ class Assistant(Agent):
 
         except Exception as e:
             logger.error(f"Error fetching scheme data: {e}")
-            # Step 4: Spoken graceful error fallback
             return "सर्वर से जुड़ने में समस्या आ रही है। जानकारी के लिए कृपया 1930 या निकटतम बैंक शाखा में संपर्क करें।"
+
+    @function_tool()
+    async def create_escalation(
+        self,
+        context: RunContext,
+        issue_summary: str,
+        urgency: str,
+        checks_completed: str,
+    ) -> str:
+        """Call this tool ONLY AFTER the user explicitly grants permission to share their issue with a human coordinator.
+        
+        Args:
+            issue_summary: Concise description of what happened (no private PINs/OTPs).
+            urgency: Urgency level ('low', 'medium', 'high', 'emergency').
+            checks_completed: Brief summary of what the AI agent already advised or checked.
+        """
+        ticket_id = f"ESC-{random.randint(10000, 99999)}"
+        safe_summary = sanitize_summary(issue_summary)
+
+        escalation_data = {
+            "ticket_id": ticket_id,
+            "caller_id": self.user_id,
+            "issue_summary": safe_summary,
+            "urgency": urgency,
+            "checks_completed": checks_completed,
+        }
+
+        # Dispatch real-time Discord notification
+        send_discord_alert(escalation_data)
+
+        return f"Escalation ticket created successfully. Tell the user their reference ID is {ticket_id}. Explain that a human security coordinator will review their case within 24 hours. Do NOT promise an instant response."
 
 
 server = AgentServer()
