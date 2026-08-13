@@ -52,6 +52,30 @@ def init_db():
         )
     """)
     
+    # Day 7 Table (Ensuring it exists for your escalation tool)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS escalations (
+            ticket_id TEXT PRIMARY KEY,
+            caller_id TEXT,
+            issue_summary TEXT,
+            urgency TEXT,
+            checks_completed TEXT,
+            language TEXT,
+            preferred_contact TEXT,
+            status TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Day 8 Table: Call Analytics
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS calls (
+            room_id TEXT PRIMARY KEY,
+            status TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    
     # Populate default financial schemes dataset if empty
     cursor.execute("SELECT COUNT(*) FROM schemes")
     if cursor.fetchone()[0] == 0:
@@ -112,6 +136,57 @@ def get_scheme_info(scheme_key: str):
             "documents": json.loads(row[4]) if row[4] else []
         }
     return None
+
+def save_escalation(data: dict):
+    """Day 7: Saves human escalation requests."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT OR REPLACE INTO escalations 
+        (ticket_id, caller_id, issue_summary, urgency, checks_completed, language, preferred_contact, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        data.get("ticket_id"),
+        data.get("caller_id"),
+        data.get("issue_summary"),
+        data.get("urgency"),
+        data.get("checks_completed"),
+        data.get("language", "Hinglish"),
+        data.get("preferred_contact", "Phone"),
+        data.get("status", "OPEN")
+    ))
+    conn.commit()
+    conn.close()
+
+# --- DAY 8 ANALYTICS FUNCTIONS ---
+
+def log_call(room_id: str, status: str):
+    """Logs or updates the success/fail status of a call."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT OR REPLACE INTO calls (room_id, status)
+        VALUES (?, ?)
+    """, (room_id, status))
+    conn.commit()
+    conn.close()
+
+def get_call_stats():
+    """Fetches total, successful, and failed calls for the dashboard."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT COUNT(*) FROM calls")
+    total = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM calls WHERE status = 'success'")
+    success = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM calls WHERE status = 'failed'")
+    failed = cursor.fetchone()[0]
+    
+    conn.close()
+    return {"total": total, "success": success, "failed": failed}
 
 # Initialize DB when module loads
 init_db()

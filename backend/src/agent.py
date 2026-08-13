@@ -123,9 +123,10 @@ def send_discord_alert(payload: dict):
 
 
 class Assistant(Agent):
-    def __init__(self, user_id: str = "caller_001") -> None:
+    def __init__(self, user_id: str = "caller_001", room_id: str = "") -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
         self.user_id = user_id
+        self.room_id = room_id
 
     @function_tool()
     async def lookup_caller(self, context: RunContext) -> str:
@@ -178,6 +179,9 @@ class Assistant(Agent):
             scheme_key: The target scheme identifier, e.g., 'pmjjby' (life insurance), 'pmsby' (accident insurance), or 'cyber_claim'.
             user_age: The caller's age to verify eligibility rules.
         """
+        # DAY 8: Log call as successful because the agent provided actionable help
+        db.log_call(self.room_id, "success")
+        
         try:
             scheme_data = db.get_scheme_info(scheme_key)
             if not scheme_data:
@@ -214,6 +218,9 @@ class Assistant(Agent):
             urgency: Urgency level ('low', 'medium', 'high', 'emergency').
             checks_completed: Brief summary of what the AI agent already advised or checked.
         """
+        # DAY 8: Log call as successful because the agent safely escalated the issue
+        db.log_call(self.room_id, "success")
+        
         ticket_id = f"ESC-{random.randint(10000, 99999)}"
         safe_summary = sanitize_summary(issue_summary)
 
@@ -265,7 +272,7 @@ async def my_agent(ctx: JobContext):
     )
 
     await session.start(
-        agent=Assistant(user_id="caller_001"),
+        agent=Assistant(user_id="caller_001", room_id=ctx.room.name),
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
@@ -279,6 +286,9 @@ async def my_agent(ctx: JobContext):
     )
 
     await ctx.connect()
+    
+    # DAY 8: Log call as 'failed' by default immediately upon connection
+    db.log_call(ctx.room.name, "failed")
 
 
 if __name__ == "__main__":
